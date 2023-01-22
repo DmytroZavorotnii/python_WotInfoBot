@@ -4,14 +4,39 @@ import time
 from aiogram import Bot, Dispatcher, executor, types
 from datetime import datetime
 
-
-API_TOKEN = '5979369026:AAEm8sQpY55cJLDwsoepkFhwe0PRt5MaqA4'
-FIND_USER_ID = 'https://api.worldoftanks.eu/wot/account/list/?application_id=8809f3163f5b1a36feba6f0a2884d885&search='
-FIND_USER_INFO = 'https://api.worldoftanks.eu/wot/account/info/?application_id=8809f3163f5b1a36feba6f0a2884d885&account_id='
-TOURNAMENT_GET_URL = 'https://worldoftanks.eu/tmsis/api/v1/lobby/?filter%5Bstatus%5D=upcoming%2Cregistration_started&filter%5Bmin_players%5D=&filter%5Btag_id%5D=&filter%5Blanguage%5D=ru&page%5Bnumber%5D=1&page%5Bsize%5D=10'
+from config import *
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
+
+
+def get_clan_info(clan_tag):
+    req = requests.get(FIND_CLAN_ID + clan_tag)
+    js = json.loads(str(req.text))
+    if js['status'] == 'ok':
+        if js['meta']['count'] >= 1:
+            clan_id = js['data'][0]['clan_id']
+            return get_clan_info_by_id(clan_id)
+        else:
+            return 'Clan not found'
+    else:
+        return 'Error'
+
+
+def get_clan_info_by_id(clan_id):
+    req = requests.get(FIND_CLAN_INFO + clan_id)
+    js = json.loads(str(req.text))
+    answer = f'[{js["data"][str(clan_id)]["tag"]}] - {js["data"][str(clan_id)]["name"]}' \
+             f'Motto - {js["data"][str(clan_id)]["motto"]}' \
+             f'Creator - {js["data"][str(clan_id)]["creator_name"]}' \
+             f'Created at {datetime.utcfromtimestamp(js["data"][str(clan_id)]["created_at"]+3600).strftime("%Y-%m-%d %H:%M:%S")} CET'
+    return answer
+
+
+def get_clan_tag_in_player_info(clan_id):
+    req = requests.get(FIND_CLAN_INFO + clan_id)
+    js = json.loads(str(req.text))
+    return js["data"][str(clan_id)]["tag"]
 
 
 def get_account_id(nickname):
@@ -31,7 +56,8 @@ def get_account_info(nickname):
         req = requests.get(FIND_USER_INFO + account_id)
         req = str(req.text)
         js = json.loads(req)
-        answer = f'Nickname - {js["data"][account_id]["nickname"]} [<TODO: CLAN>],' \
+        clan_id = js["data"][account_id]["clan_id"]
+        answer = f'Nickname - {js["data"][account_id]["nickname"]} [{get_clan_tag_in_player_info(clan_id)}],' \
                  f'\nGlobal rating - {js["data"][account_id]["global_rating"]},' \
                  f'\nLast battle time - {datetime.utcfromtimestamp(js["data"][account_id]["last_battle_time"]+3600).strftime("%Y-%m-%d %H:%M:%S")} CET,' \
                  f'\nMaximum damage - {js["data"][account_id]["statistics"]["all"]["max_damage"]},' \
@@ -96,7 +122,7 @@ async def send_tournament_info(message: types.Message):
 @dp.message_handler(commands=['clan'])
 async def send_clan_info(message: types.Message):
     print(datetime.now(), message.text)
-    await message.answer('TODO')
+    await message.answer(get_clan_info(message.text[6:]))
 
 
 @dp.message_handler()
